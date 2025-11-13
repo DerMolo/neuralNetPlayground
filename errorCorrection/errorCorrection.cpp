@@ -51,8 +51,10 @@ VectorXd hebbFunction(MatrixXd inputs, MatrixXd outputs) {
 
     Sum /= N;
 
-    VectorXd weights = Sum.transpose();
-    weights(0) = 1; // including bias
+    VectorXd weights(Sum.rows()+1);
+    weights(0) = 1;
+    for (int i = 0; i < Sum.rows(); i++) 
+        weights(i+1) = Sum(i,0);
     return weights;
 }
 
@@ -66,7 +68,7 @@ void updateWeights(VectorXd inputs, VectorXd& weights, const double learningRate
     for (int i = 1; i < inputs.size(); i++) {
         weights(i) += learningRate * delta * inputs(i - 1);
     }
-    cout << "UPDATED WEIGHTS: \n" << weights << endl;
+    //cout << "UPDATED WEIGHTS: \n" << weights << endl;
 }
 
 // pairs a tanh(z) to their respective class 
@@ -147,12 +149,12 @@ VectorXd learnWeights(MatrixXd learningSet, int classes, bool goRMSE, bool randW
     bool continueLearning = false;
 
     do {
-        printf("EPOCH: %d \n", iteration);
-        cout << "WEIGHTS: \n" << weights << endl;
+        //printf("EPOCH: %d \n", iteration);
+        //cout << "WEIGHTS: \n" << weights << endl;
 
         for (int iter = 0; iter < inputs.rows(); iter++) {
             VectorXd input = inputs.row(iter);
-            cout << "SAMPLE " << iter << ": \n" << input << endl;
+           // cout << "SAMPLE " << iter << ": \n" << input << endl;
             double delta = deltaArr(iter);
 
             if (continueLearning)
@@ -163,7 +165,7 @@ VectorXd learnWeights(MatrixXd learningSet, int classes, bool goRMSE, bool randW
                 sum += weights(i) * input(i - 1);
             }
 
-            cout << "WEIGHTED SUM " << iter << ": " << sum << endl;
+            //cout << "WEIGHTED SUM " << iter << ": " << sum << endl;
             neuronOuts[iter] = classify(tanh(sum), classes);
 
             if (isnan(tanh(sum))) {
@@ -171,16 +173,16 @@ VectorXd learnWeights(MatrixXd learningSet, int classes, bool goRMSE, bool randW
                 exit(1);
             }
 
-            printf("tanh(z): %lf  assignedClass: %lf ", tanh(sum), neuronOuts[iter]);
-            if (dOuts(iter) == neuronOuts[iter])
-                printf("\033[32m expected output found \033[0m \n");
-            else
-                printf("\033[31m expected output not found \033[0m \n");
+            //printf("tanh(z): %lf  assignedClass: %lf ", tanh(sum), neuronOuts[iter]);
+            //if (dOuts(iter) == neuronOuts[iter])
+                //printf("\033[32m expected output found \033[0m \n");
+            //else
+                //printf("\033[31m expected output not found \033[0m \n");
 
-            cout << "\n+++++\n";
+            
             deltaArr[iter] = dOuts[iter] - neuronOuts[iter];
         }
-
+        //cout << "\n+++++\n";
         double MSE = 0;
         for (auto d : deltaArr)
             MSE += pow(d, 2);
@@ -214,6 +216,6 @@ int main() {
     VectorXd outs = samples.col(samples.cols() - 1);
     double learningRate = 1.0 / samples.cols();
 
-    VectorXd weights = learnWeights(samples, classes, true, true);
+    VectorXd weights = learnWeights(samples, classes, true, false);
     testWeights(weights, inputs, outs, classes);
 }
