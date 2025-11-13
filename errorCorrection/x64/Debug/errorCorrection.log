@@ -1,5 +1,5 @@
 ﻿  errorCorrection.cpp
-C:\Users\Iampi\source\repos\errorCorrection\errorCorrection\errorCorrection.cpp(19,14): warning C4244: 'initializing': conversion from 'Eigen::Index' to 'double', possible loss of data
-  errorCorrection.vcxproj -> C:\Users\Iampi\source\repos\errorCorrection\x64\Debug\errorCorrection.exe
+C:\Users\CARME\source\repos\neuralNetPlayground\errorCorrection\errorCorrection.cpp(32,14): warning C4244: 'initializing': conversion from 'Eigen::Index' to 'double', possible loss of data
+  errorCorrection.vcxproj -> C:\Users\CARME\source\repos\neuralNetPlayground\x64\Debug\errorCorrection.exe
   'pwsh.exe' is not recognized as an internal or external command,
   operable program or batch file.

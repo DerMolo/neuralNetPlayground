@@ -9,6 +9,19 @@
 using namespace std;
 using namespace Eigen;
 
+template <typename T> 
+void operator <<(ostream& os, vector<T> arr) {
+    for (auto temp : arr)
+        os << ", " << temp;
+    os << endl;
+    //return os;
+}
+
+struct learningData {
+    VectorXd weights; 
+    vector<double> mseArr; 
+};
+
 double randDouble() { return (double)rand() / (double)RAND_MAX; }
 
 VectorXd hebbFunction(MatrixXd inputs, MatrixXd outputs) {
@@ -61,6 +74,7 @@ VectorXd hebbFunction(MatrixXd inputs, MatrixXd outputs) {
 // z : weightedSum 
 // tanh = formats weightedSum to a continuous value between -1 and 1 
 // double tanh(const double z) { return (exp(z) - exp(-z)) / (exp(z) + exp(-z)); }
+//  tanh() provided by <cmath> addresses divide-by-zero errors
 
 void updateWeights(VectorXd inputs, VectorXd& weights, const double learningRate,
     const double delta, const double marginOfErr) {
@@ -90,6 +104,25 @@ double classify(double neuronOut, int classes) {
     }
     return bin;
 }
+double classify(double neuronOut, int classes, bool output) {
+    //bool output is irrelevant
+    double interval = (double)2 / classes;
+    cout << "\ninterval: " << interval << endl;
+    int bin = 0;
+    cout << "NeuronOut: " << neuronOut << endl;
+
+    for (double i = -1.0; i < 1.0; i += interval) {
+        cout << "interval: \n Min: " << i << "  Max: " << i + interval << endl;
+        if (i < 1 - interval) {
+            if (i <= neuronOut && neuronOut < i + interval)
+                return bin;
+        }
+        else if (i <= neuronOut && neuronOut <= i + interval)
+            return bin;
+        bin++;
+    }
+    return bin;
+}
 
 void testWeights(VectorXd weights, MatrixXd inputs, VectorXd dOuts, int classes) {
     VectorXd output(inputs.rows());
@@ -99,8 +132,11 @@ void testWeights(VectorXd weights, MatrixXd inputs, VectorXd dOuts, int classes)
         double sum = weights(0);
         for (int i = 1; i < inputs.cols() + 1; i++)
             sum += weights(i) * sample(i - 1);
-        output(x) = classify(tanh(sum), classes);
+        output(x) = classify(tanh(sum), classes, true);
+        cout << "CLASS: " << output(x)<<endl;
     }
+
+    cout << "OUTPUT FROM EXTRACTED WEIGHTS: \n" << output << endl;
 
     if (dOuts.isApprox(output))
         cout << "\033[32mExpected output found\033[0m" << endl;
@@ -109,7 +145,7 @@ void testWeights(VectorXd weights, MatrixXd inputs, VectorXd dOuts, int classes)
 }
 
 // core function that extracts weights from a learning set 
-VectorXd learnWeights(MatrixXd learningSet, int classes, bool goRMSE, bool randWeights) {
+learningData learnWeights(MatrixXd learningSet, int classes, bool goRMSE, bool randWeights) {
     MatrixXd inputs = learningSet.block(0, 0, learningSet.rows(), learningSet.cols() - 1);
     cout << "INPUTS: \n" << inputs << endl;
 
@@ -119,6 +155,7 @@ VectorXd learnWeights(MatrixXd learningSet, int classes, bool goRMSE, bool randW
 
     VectorXd weights(learningSet.cols());
 
+    //populating initial weights 
     if (randWeights) {
         weights(0) = 1; // starting with bias 
         for (int y = 1; y < weights.size(); y++) {
@@ -133,21 +170,22 @@ VectorXd learnWeights(MatrixXd learningSet, int classes, bool goRMSE, bool randW
         cout << "\n+++++\n";
     }
 
+    //intializing constants
     double learningRate = 1.0 / weights.size();
     learningRate = 0.001;
-    double marginOfErr = 1.0 / classes;
+    const double marginOfErr = 1.0 / classes;
 
     VectorXd deltaArr(inputs.rows());
     deltaArr.setZero();
 
+    vector<double> errData;
     VectorXd neuronOuts(inputs.rows());
-    VectorXd errArr(inputs.rows());
-    errArr.setZero();
 
     int iteration = 0;
-    int iterMax = 1000000;
+    const int iterMax = 1000000;
     bool continueLearning = false;
 
+    int vectInd = 0;
     do {
         //printf("EPOCH: %d \n", iteration);
         //cout << "WEIGHTS: \n" << weights << endl;
@@ -189,6 +227,13 @@ VectorXd learnWeights(MatrixXd learningSet, int classes, bool goRMSE, bool randW
 
         MSE /= inputs.rows();
         double RMSE = sqrt(MSE);
+        //neighboring duplicates are not included 
+        if (vectInd == 0 || errData[vectInd - 1] != RMSE) {
+            //if(vectInd - 1 >= 0)
+              //  cout << "errData[vectInd-1]: "<< errData[vectInd - 1] << " Pushed RMSE: " << RMSE << endl;
+            errData.push_back(RMSE);
+            vectInd++;
+        }
 
         if (RMSE < marginOfErr && goRMSE)
             continueLearning = false;
@@ -196,14 +241,196 @@ VectorXd learnWeights(MatrixXd learningSet, int classes, bool goRMSE, bool randW
             continueLearning = false;
         else
             continueLearning = true;
-
         iteration++;
     } while (continueLearning && iteration < iterMax);
+
+    learningData datum;
+    datum.weights = weights;
+    datum.mseArr = errData;
+
     cout << "ITERATIONS: " << iteration << endl;
     cout << "\nEXTRACTED WEIGHTS: \n" << weights << endl;
     cout << "\n+++++\n";
-    return weights;
+    return datum;
 }
+
+learningData learnWeights(MatrixXd learningSet, int classes, bool goRMSE, bool randWeights) {
+    MatrixXd inputs = learningSet.block(0, 0, learningSet.rows(), learningSet.cols() - 1);
+    cout << "INPUTS: \n" << inputs << endl;
+
+    VectorXd dOuts = learningSet.col(learningSet.cols() - 1);
+    cout << "DESIRED OUTS: \n" << dOuts << endl;
+    cout << "\n+++++\n";
+
+    VectorXd weights(learningSet.cols());
+
+    //populating initial weights 
+    if (randWeights) {
+        weights(0) = 1; // starting with bias 
+        for (int y = 1; y < weights.size(); y++) {
+            weights(y) = randDouble();
+        }
+        cout << "Randomly Generated Weights: \n" << weights << endl;
+        cout << "\n+++++\n";
+    }
+    else {
+        weights = hebbFunction(inputs, (MatrixXd)dOuts);
+        cout << "HEBBIAN WEIGHTS: \n" << weights << endl;
+        cout << "\n+++++\n";
+    }
+
+    //intializing constants
+    double learningRate = 1.0 / weights.size();
+    learningRate = 0.001;
+    const double marginOfErr = 1.0 / classes;
+
+    VectorXd deltaArr(inputs.rows());
+    deltaArr.setZero();
+
+    vector<double> errData;
+    VectorXd neuronOuts(inputs.rows());
+
+    int iteration = 0;
+    const int iterMax = 1000000;
+    bool continueLearning = false;
+
+    int vectInd = 0;
+    do {
+        for (int iter = 0; iter < inputs.rows(); iter++) {
+            VectorXd input = inputs.row(iter);
+            double delta = deltaArr(iter);
+
+            if (continueLearning)
+                updateWeights(inputs.row(iter), weights, learningRate, delta, marginOfErr);
+
+            double sum = weights(0);
+            for (int i = 1; i < inputs.cols() + 1; i++) {
+                sum += weights(i) * input(i - 1);
+            }
+            neuronOuts[iter] = classify(tanh(sum), classes);
+    
+            deltaArr[iter] = dOuts[iter] - neuronOuts[iter];
+        }
+        double MSE = 0;
+        for (auto d : deltaArr)
+            MSE += pow(d, 2);
+
+        MSE /= inputs.rows();
+        double RMSE = sqrt(MSE);
+
+        if (vectInd == 0 || errData[vectInd - 1] != RMSE) {
+            errData.push_back(RMSE);
+            vectInd++;
+        }
+
+        if (RMSE < marginOfErr && goRMSE)
+            continueLearning = false;
+        else if (MSE < marginOfErr && !goRMSE)
+            continueLearning = false;
+        else
+            continueLearning = true;
+        iteration++;
+    } while (continueLearning && iteration < iterMax);
+
+    learningData datum;
+    datum.weights = weights;
+    datum.mseArr = errData;
+
+    cout << "ITERATIONS: " << iteration << endl;
+    cout << "\nEXTRACTED WEIGHTS: \n" << weights << endl;
+    cout << "\n+++++\n";
+    return datum;
+}
+
+// REFORMATTED LEARNWEIGHTS() 
+
+learningData learnWeights(MatrixXd inputs, VectorXd dOuts, VectorXd weights, double threshold, int classes) {
+    cout << "INPUTS: \n" << inputs << endl;
+
+    cout << "DESIRED OUTS: \n" << dOuts << endl;
+    cout << "\n+++++\n";
+
+    //intializing constants
+    double learningRate = 1.0 / weights.size();
+    learningRate = 0.001;
+
+    VectorXd deltaArr(inputs.rows());
+    deltaArr.setZero();
+
+    vector<double> errData;
+    VectorXd neuronOuts(inputs.rows());
+
+    int iteration = 0;
+    const int iterMax = 1000000;
+    bool continueLearning = false;
+
+    int vectInd = 0;
+    do {
+        //printf("EPOCH: %d \n", iteration);
+        //cout << "WEIGHTS: \n" << weights << endl;
+
+        for (int iter = 0; iter < inputs.rows(); iter++) {
+            VectorXd input = inputs.row(iter);
+            // cout << "SAMPLE " << iter << ": \n" << input << endl;
+            double delta = deltaArr(iter);
+
+            if (continueLearning)
+                updateWeights(inputs.row(iter), weights, learningRate, delta, threshold);
+
+            double sum = weights(0);
+            for (int i = 1; i < inputs.cols() + 1; i++) {
+                sum += weights(i) * input(i - 1);
+            }
+
+            //cout << "WEIGHTED SUM " << iter << ": " << sum << endl;
+            neuronOuts[iter] = classify(tanh(sum), classes);
+
+            if (isnan(tanh(sum))) {
+                cerr << "INVALID VALUE FROM TANH()" << endl;
+                exit(1);
+            }
+
+            //printf("tanh(z): %lf  assignedClass: %lf ", tanh(sum), neuronOuts[iter]);
+            //if (dOuts(iter) == neuronOuts[iter])
+                //printf("\033[32m expected output found \033[0m \n");
+            //else
+                //printf("\033[31m expected output not found \033[0m \n");
+
+
+            deltaArr[iter] = dOuts[iter] - neuronOuts[iter];
+        }
+        //cout << "\n+++++\n";
+        double MSE = 0;
+        for (auto d : deltaArr)
+            MSE += pow(d, 2);
+
+        MSE /= inputs.rows();
+        double RMSE = sqrt(MSE);
+        //duplicate values are not included 
+        if (vectInd == 0 || errData[vectInd - 1] != RMSE) {
+            //if(vectInd - 1 >= 0)
+              //  cout << "errData[vectInd-1]: "<< errData[vectInd - 1] << " Pushed RMSE: " << RMSE << endl;
+            errData.push_back(RMSE);
+            vectInd++;
+        }
+
+        if (RMSE < threshold)
+            continueLearning = false;
+        else
+            continueLearning = true;
+        iteration++;
+    } while (continueLearning && iteration < iterMax);
+
+    learningData datum;
+    datum.weights = weights;
+    datum.mseArr = errData;
+
+    cout << "ITERATIONS: " << iteration << endl;
+    cout << "\nEXTRACTED WEIGHTS: \n" << weights << endl;
+    cout << "\n+++++\n";
+    return datum;
+}
+
 
 int main() {
     int classes = 3;
@@ -211,11 +438,23 @@ int main() {
     samples << 0, 2, 1, 0,
         1, 2, 3, 1,
         2, 1, 3, 2;
+    
+    double threshold = 1.0 / classes; 
 
     MatrixXd inputs = samples.block(0, 0, samples.rows(), samples.cols() - 1);
     VectorXd outs = samples.col(samples.cols() - 1);
     double learningRate = 1.0 / samples.cols();
+    
+    VectorXd randWeights(samples.cols());
+    randWeights.setRandom(); randWeights(0) = 1;//bias
 
-    VectorXd weights = learnWeights(samples, classes, true, false);
-    testWeights(weights, inputs, outs, classes);
+    VectorXd hebbWeights = hebbFunction(inputs, (MatrixXd)outs);
+
+
+   //learningData datum = learnWeights(samples, classes, true, false);
+   //testWeights(datum.weights, inputs, outs, classes);
+   //cout<< "EXTRACTED RMSE VECTOR: " << datum.mseArr;
+
+    learningData datum = learnWeights(inputs, outs, randWeights, threshold, 3);
+
 }
